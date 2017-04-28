@@ -2,11 +2,12 @@
 # Created by Ron Danon - rondanon@gmail.com
 
 #%% define the generator %%#
+# import modules
 import cv2
 import numpy as np
 from sklearn.utils import shuffle
 
-angleDeflection = 0.1
+angleDeflection = 0.1  #the deflection of the steering angle for the side cameras 
 def generator(samples, batch_size=32):
     num_samples = len(samples)
     while 1:
@@ -16,19 +17,18 @@ def generator(samples, batch_size=32):
             images =[]
             angles = []
             for batch_sample in batch_samples:
+                #Iterate over the 3 images (middle left and right) and the corresponding deflections
                 for i,deflection in zip(range(3),[0.0,angleDeflection,-angleDeflection]):
                     originPath = batch_sample[i].split('\\')
-                    try:
-                        path = '../recorded_data/' + originPath[-3] + '/IMG/' + originPath[-1]
-                    except IndexError:
-                        continue
+                    path = '../recorded_data/' + originPath[-3] + '/IMG/' + originPath[-1]
                     image = cv2.imread(path)
                     measurement = float(batch_sample[3]) + deflection
-                    image_flipped = np.fliplr(image)
-                    measurement_flipped = -measurement
+                    image_flipped = np.fliplr(image)    #create flipped image
+                    measurement_flipped = -measurement  #create flipped steering angles
                     images.extend([image,image_flipped])
                     angles.extend([measurement,measurement_flipped]) 
             
+            #Transform lists to numpy arrays for keras
             X = np.array(images)
             y = np.array(angles)
             yield (X, y)
@@ -36,6 +36,7 @@ def generator(samples, batch_size=32):
 #%% load the data %%#
 import csv
 samples = []
+#Define the dolders with the training data
 dataFolders = ['lap22','lap22_rev',
                      'strong_turn_left1','strong_turn_right1','strong_turn_left2','strong_turn_right2',
                      'strong_turn_left3','strong_turn_right3','strong_turn_left4','strong_turn_right4', 
@@ -50,16 +51,17 @@ for folder in dataFolders:
             samples.append(line)
 
 from sklearn.model_selection import train_test_split
-train_samples, valid_samples = train_test_split(samples, test_size = 0.2)
+train_samples, valid_samples = train_test_split(samples, test_size = 0.2) #Set the validation set to 20% of the data
 
 
 #%% the keras model %%#
 BATCH_SIZE = 128
-EPOCHS = 1
+EPOCHS = 2
 topCrop = 63
 botCrop = 23
 drop = 0.5
 
+#set the generator
 train_generator = generator(train_samples,batch_size=BATCH_SIZE)
 valid_generator = generator(valid_samples,batch_size=BATCH_SIZE)
 
@@ -68,6 +70,7 @@ from keras.layers.core import Flatten, Dense, Lambda, Dropout
 from keras.layers.convolutional import Cropping2D, Convolution2D
 from keras.layers.pooling import MaxPooling2D
 
+#Create the Nvidia CNN architecture
 model = Sequential()
 model.add(Cropping2D(cropping=((topCrop,botCrop),(0,0)), input_shape=(160,320,3))) #output 74x320x3
 model.add(Lambda(lambda x: x/127.5-1.0))
@@ -86,7 +89,7 @@ model.add(Dropout(0.5))
 model.add(Dense(10))
 model.add(Dropout(0.5))
 model.add(Dense(1))
-#model.load_weights('model10.h5')
+#model.load_weights('model.h5')
 
 #%% train model %%#
 model.compile(loss='mse',optimizer='adam',)
